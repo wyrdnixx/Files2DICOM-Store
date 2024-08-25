@@ -5,11 +5,11 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Files2Dicom_Test"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
+        Title="MainWindow" Height="984" Width="800">
+    <Grid Margin="0,0,0,53">
         <Button x:Name="btnStartScan" Content="StartFileScan" HorizontalAlignment="Left" Margin="25,52,0,0" VerticalAlignment="Top" Click="btnStartFileScan_Click" Width="100"/>
         <TextBox x:Name="tbFileCount" HorizontalAlignment="Left" Margin="620,26,0,0" TextWrapping="Wrap" Text="TextBox" VerticalAlignment="Top" Width="120"/>
-        <TextBox x:Name="tbStatus" HorizontalAlignment="Center" Margin="0,103,0,0" TextWrapping="Wrap" Text="Status" VerticalAlignment="Top" Width="750" Height="300"/>
+        <TextBox x:Name="tbStatus" HorizontalAlignment="Center" Margin="0,103,0,0" TextWrapping="Wrap" Width="750" Height="808" VerticalAlignment="Top"/>
         <Button x:Name="btnPauseScan" Content="pause" HorizontalAlignment="Left" Margin="170,52,0,0" VerticalAlignment="Top" Click="btnPauseScan_Click"/>
         <Button x:Name="btnStopScan" Content="Stop" HorizontalAlignment="Left" Margin="232,52,0,0" VerticalAlignment="Top" Click="btnStopScan_Click"/>
         <Label Content="FileCount" HorizontalAlignment="Left" Margin="514,22,0,0" VerticalAlignment="Top" Width="106"/>

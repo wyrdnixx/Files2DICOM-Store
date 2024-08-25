@@ -96,11 +96,11 @@ namespace Files2Dicom_Test
             UpdateTextBox("running DICOM Echo...");
             string successEcho = await SendDicomEcho(serverIp, serverPort, callingAeTitle, calledAeTitle);
             //UpdateTextBox($"DICOM Echo {(successEcho ? "succeeded" : "failed")}");
-            UpdateTextBox("DICOM Echo result: " + successEcho );
+            UpdateTextBox("DICOM Echo result:<" + successEcho +">");
 
             // await Task.Delay(5000);
 
-            if (successEcho != "Success")
+            if (successEcho != "C-ECHO response: Success")
             {
                 UpdateTextBox("Failed DICOM Echo - stopping task ");
             } else
@@ -249,7 +249,7 @@ namespace Files2Dicom_Test
                               //  UpdateStats();
                                 bool successStore = await SendDicomFile(serverIp, serverPort, callingAeTitle, calledAeTitle, filePath, fileSizeInBytes.ToString());
                                 //UpdateTextBox($"C-STORE {(successStore ? "succeeded" : "failed")}");
-
+                                UpdateTextBox("C-STORE response: Success " + filePath);
 
 
                             }
@@ -260,7 +260,7 @@ namespace Files2Dicom_Test
                                 // SQL query to insert data into the Employees table
                                 string query = "INSERT INTO files (filepath,fileSizeInBytes,error) VALUES (@filepath,@fileSizeInBytes,'no-dicom-file')";
 
-                                UpdateTextBox("C-STORE response: Success");
+                                
                                 try
                                 {
 
@@ -276,6 +276,7 @@ namespace Files2Dicom_Test
                                         int rowsAffected = command.ExecuteNonQuery();
                                         //UpdateTextBox($"Rows inserted: {rowsAffected}");
                                     }
+                                    UpdateTextBox("Added non-DICOM File to Database: "+ filePath);
                                 }
                                 catch (Exception ex)
                                 {
@@ -438,7 +439,7 @@ namespace Files2Dicom_Test
                         // SQL query to insert data into the Employees table
                         string query = "INSERT INTO files (filepath,fileSizeInBytes, patname,patbirthd,institutionName,error) VALUES (@filepath,@fileSizeInBytes, @patName,@patBirthd,@institutionName,'0')";
 
-                        UpdateTextBox("C-STORE response: Success");
+                        
                         try
                         {
                             
@@ -455,7 +456,7 @@ namespace Files2Dicom_Test
 
                                 // Execute the INSERT command
                                 int rowsAffected = command.ExecuteNonQuery();
-                                UpdateTextBox($"Rows inserted: {rowsAffected}");
+                                UpdateTextBox($"Save C-Store result to DB - Rows inserted: {rowsAffected}");
                             }
                         }
                         catch (Exception ex)
