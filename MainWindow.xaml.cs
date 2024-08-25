@@ -22,6 +22,7 @@ using System.Windows.Shapes;
 using static System.Net.Mime.MediaTypeNames;
 using Microsoft.Data.SqlClient;
 using System.Collections;
+using System.Configuration;
 
 namespace Files2Dicom_Test
 {
@@ -31,11 +32,16 @@ namespace Files2Dicom_Test
     public partial class MainWindow : Window
     {
 
-
+/*
         private string serverIp = "192.168.1.114";   // Replace with the DICOM server IP address
         private int serverPort = 4242;            // Replace with the DICOM server port
         private string callingAeTitle = "MYAET"; // Replace with your AE Title
         private string calledAeTitle = "SERVER"; // Replace with the server's AE Title
+*/
+        private string serverIp ;   // Replace with the DICOM server IP address
+        private int serverPort;            // Replace with the DICOM server port
+        private string callingAeTitle; // Replace with your AE Title
+        private string calledAeTitle; // Replace with the server's AE Title
 
         private int filecount = 0;
         private int nonDicomFileCount= 0;
@@ -45,7 +51,8 @@ namespace Files2Dicom_Test
         private DateTime startTime;
         private DateTime endTime;
 
-        private string connectionString = "Server=mssql;Database=dicomImport;Integrated Security=true;TrustServerCertificate=True;";
+        //private string connectionString = "Server=mssql;Database=dicomImport;Integrated Security=true;TrustServerCertificate=True;";
+        private string connectionString;
         private SqlConnection connection;
         
 
@@ -53,6 +60,13 @@ namespace Files2Dicom_Test
         public MainWindow()
         {
             InitializeComponent();
+
+            connectionString = ConfigurationManager.AppSettings["DBconnectionString"];
+            serverIp = ConfigurationManager.AppSettings["serverIp"];
+            serverPort = int.Parse(ConfigurationManager.AppSettings["serverPort"]);
+            callingAeTitle = ConfigurationManager.AppSettings["callingAeTitle"];
+            calledAeTitle = ConfigurationManager.AppSettings["calledAeTitle"];
+
             connection = new SqlConnection(connectionString);
 
             try
@@ -84,19 +98,26 @@ namespace Files2Dicom_Test
             //UpdateTextBox($"DICOM Echo {(successEcho ? "succeeded" : "failed")}");
             UpdateTextBox("DICOM Echo result: " + successEcho );
 
-            //runDicomEcho();
-            //sendDicomFile(@"Z:\JoJo\DicomTestDaten\Breitinger Inge 200025579\DICOM\0000A7F9\AA998CF3\AA5234D4\0000A83F\EEC57DEC");
+            // await Task.Delay(5000);
 
-            // Call the asynchronous method and wait for it to complete
-            // await PerformAsyncFileScan();
-            startTime = DateTime.Now;
-            UpdateTextBox("starting: " + startTime.ToString());
-            await StartFileScanAsync();
-            endTime = DateTime.Now;
-            UpdateTextBox("finished: " + endTime.ToString());            
-            TimeSpan timeDifference = endTime - startTime;
-            UpdateTextBox($"Hours: {timeDifference.Hours}, Minutes: {timeDifference.Minutes}, Seconds: {timeDifference.Seconds}, Milliseconds: {timeDifference.Milliseconds}");
-            UpdateTextBox("files processed: " + filecount.ToString());
+            if (successEcho != "Success")
+            {
+                UpdateTextBox("Failed DICOM Echo - stopping task ");
+            } else
+            {
+                // Call the asynchronous method and wait for it to complete
+                // await PerformAsyncFileScan();
+                startTime = DateTime.Now;
+                UpdateTextBox("starting: " + startTime.ToString());
+                await StartFileScanAsync();
+                endTime = DateTime.Now;
+                UpdateTextBox("finished: " + endTime.ToString());
+                TimeSpan timeDifference = endTime - startTime;
+                UpdateTextBox($"Hours: {timeDifference.Hours}, Minutes: {timeDifference.Minutes}, Seconds: {timeDifference.Seconds}, Milliseconds: {timeDifference.Milliseconds}");
+                UpdateTextBox("files processed: " + filecount.ToString());
+            }
+
+            
         }
 
 
