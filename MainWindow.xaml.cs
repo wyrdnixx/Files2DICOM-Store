@@ -24,6 +24,10 @@ using Microsoft.Data.SqlClient;
 using System.Collections;
 using System.Configuration;
 using System.ComponentModel;
+using SharpCompress.Common;
+using SharpCompress.Archives;
+using SharpCompress.Archives.Tar;
+using Path = System.IO.Path;
 
 namespace Files2Dicom_Test
 {
@@ -43,6 +47,8 @@ namespace Files2Dicom_Test
         private int serverPort;            // Replace with the DICOM server port
         private string callingAeTitle; // Replace with your AE Title
         private string calledAeTitle; // Replace with the server's AE Title
+        private string scanFolder; // Temp folder for extracting files
+        private string tempFolder; // Temp folder for extracting files
 
         private int filecount = 0;
         private int nonDicomFileCount= 0;
@@ -67,6 +73,8 @@ namespace Files2Dicom_Test
             serverPort = int.Parse(ConfigurationManager.AppSettings["serverPort"]);
             callingAeTitle = ConfigurationManager.AppSettings["callingAeTitle"];
             calledAeTitle = ConfigurationManager.AppSettings["calledAeTitle"];
+            scanFolder = ConfigurationManager.AppSettings["scanFolder"];
+            tempFolder = ConfigurationManager.AppSettings["tempFolder"];
 
             //this.Loaded += MainWindow_Loaded;
 
@@ -195,7 +203,7 @@ namespace Files2Dicom_Test
             // Simulate a task that takes time to complete (e.g., an I/O operation)
             //await Task.Delay(1000); // Delays for 1 seconds
 
-            string directoryPath = @"Z:\JoJo\DicomTestDaten"; // Specify your directory path here
+            string directoryPath = scanFolder; // Specify your directory path here
 
             try
             {
@@ -253,13 +261,12 @@ namespace Files2Dicom_Test
                         if (fileAlreadyExists == true)
                         {
                             //nothing
-                            UpdateTextBox("File already found: filePath");
+                            UpdateTextBox("File already found: " + filePath);
                         } else
                         {
+                            UpdateTextBox("File processing: " + filePath);
 
-                        
-
-                           // UpdateTextBox("File path does not exist in the table.");
+                            // UpdateTextBox("File path does not exist in the table.");
                             // Get the file size
                             FileInfo fileInfo = new FileInfo(filePath);
                             long fileSizeInBytes = fileInfo.Length;
@@ -271,7 +278,7 @@ namespace Files2Dicom_Test
                             {
 
                                 dicomFileCount++;
-                                UpdateTextBox("valid DICOM File: " + filePath);
+                                //UpdateTextBox("valid DICOM File: " + filePath);
                               //  UpdateStats();
                                 bool successStore = await SendDicomFile(serverIp, serverPort, callingAeTitle, calledAeTitle, filePath, fileSizeInBytes.ToString());
                                 //UpdateTextBox($"C-STORE {(successStore ? "succeeded" : "failed")}");
@@ -279,14 +286,113 @@ namespace Files2Dicom_Test
 
 
                             }
+                            else if (filePath.EndsWith(".tar")) 
+                            {
+                                // insert DB-Entry for tar file
+                                string queryInsertTarFile = "INSERT INTO files (filepath,fileSizeInBytes,error) VALUES (@filepath,@fileSizeInBytes,@errortext)";
+                                try
+                                {
+                                    // Create a SqlCommand object
+                                    using (SqlCommand command = new SqlCommand(queryInsertTarFile, connection))
+                                    {
+                                        // Add parameters to the command
+                                        command.Parameters.AddWithValue("@filepath", filePath);
+                                        command.Parameters.AddWithValue("@fileSizeInBytes", fileSizeInBytes.ToString());
+                                        command.Parameters.AddWithValue("@errortext", "File is tar archive... extracting ");
+
+                                        // Execute the INSERT command
+                                        int rowsAffected = command.ExecuteNonQuery();
+                                        //UpdateTextBox($"Rows inserted: {rowsAffected}");
+                                    }                                    
+                                }
+                                catch (Exception exc)
+                                {
+                                    UpdateTextBox($"An error occurred on SQL insert: {queryInsertTarFile} {exc.Message}");
+                                }
+
+                                // process tar archive file
+                                // Create a temp directory
+                                string tempDir = Path.Combine(tempFolder, Guid.NewGuid().ToString());
+                                Directory.CreateDirectory(tempDir);
+                                try
+                                {
+                                    // Extract the tar file to the temp directory
+                                    ExtractTarFile(filePath, tempDir);
+
+                                    // Process files: Print file names to console
+                                    foreach (var extractedFile in Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories))
+                                    {
+                                        FileInfo extractedFileInfo = new FileInfo(filePath);
+                                        long extractedFileSizeInBytes = fileInfo.Length;
+                                        try
+                                        {
+                                            //UpdateTextBox(Path.GetFileName(extractedFile));
+                                            bool extractedIsValidDicom = IsDicomFile(extractedFile);
+                                            if (extractedIsValidDicom)
+                                            {
+
+                                                dicomFileCount++;
+                                                //UpdateTextBox("valid DICOM File: " + extractedFile);
+                                                //  UpdateStats();
+                                                bool successStore = await SendDicomFile(serverIp, serverPort, callingAeTitle, calledAeTitle, extractedFile, extractedFileSizeInBytes.ToString());
+                                                //UpdateTextBox($"C-STORE {(successStore ? "succeeded" : "failed")}");
+                                                UpdateTextBox("C-STORE response: Success " + extractedFile + " : originalArchive: " + filePath);
+
+                                            }
+                                        }
+                                        catch (Exception exCheckFIle)
+                                        {
+                                            UpdateTextBox("error DicomTest file: " + extractedFile + " : error: " + exCheckFIle);
+
+                                        }   
+                                        
+                                    }
+                                } catch (Exception ex)
+                                {
+                                    string query = "INSERT INTO files (filepath,fileSizeInBytes,error) VALUES (@filepath,@fileSizeInBytes,@errortext)";
+
+                                    try
+                                    {
+
+
+                                        // Create a SqlCommand object
+                                        using (SqlCommand command = new SqlCommand(query, connection))
+                                        {
+                                            // Add parameters to the command
+                                            command.Parameters.AddWithValue("@filepath", filePath);
+                                            command.Parameters.AddWithValue("@fileSizeInBytes", fileSizeInBytes.ToString());
+                                            command.Parameters.AddWithValue("@errortext", "Error extracting tar archive: " + ex.Message);
+
+                                            // Execute the INSERT command
+                                            int rowsAffected = command.ExecuteNonQuery();
+                                            //UpdateTextBox($"Rows inserted: {rowsAffected}");
+                                        }
+                                        UpdateTextBox(filePath + ": Error extracting tar archive: " + ex.Message);
+                                    }
+                                    catch (Exception exc)
+                                    {
+                                        UpdateTextBox($"An error occurred on SQL insert: {query} {exc.Message}");
+                                    }
+
+                                }
+                                finally
+                                {
+                                    // Clean up: Delete the extracted files
+                                    if (Directory.Exists(tempDir))
+                                    {
+                                        Directory.Delete(tempDir, true);
+                                    }
+                                }
+
+                            }
                             else
+
                             {
                                 nonDicomFileCount++;
                               //  UpdateStats();
                                 // SQL query to insert data into the Employees table
                                 string query = "INSERT INTO files (filepath,fileSizeInBytes,error) VALUES (@filepath,@fileSizeInBytes,'no-dicom-file')";
-
-                                
+                                                                
                                 try
                                 {
 
@@ -327,20 +433,37 @@ namespace Files2Dicom_Test
             btnStartScan.IsEnabled = true;
         }
 
-        private  void UpdateStats()
+        static void ExtractTarFile(string tarFilePath, string outputDir)
         {
-            if (Dispatcher.CheckAccess())
+            using (Stream stream = File.OpenRead(tarFilePath))
+            using (var archive = TarArchive.Open(stream))
             {
-                // If we are on the UI thread, directly update the TextBox
-                //tbStatus.Text += Environment.NewLine + "UI-Thread: " + text;                
-                 tbFileCount.Text = filecount.ToString();
-                tbNonDicomFiles.Text = nonDicomFileCount.ToString();
-                
+                foreach (var entry in archive.Entries)
+                {
+                    if (!entry.IsDirectory)
+                    {
+                        string filePath = Path.Combine(outputDir, entry.Key);
+                        string directoryPath = Path.GetDirectoryName(filePath);
+
+                        if (!Directory.Exists(directoryPath))
+                        {
+                            Directory.CreateDirectory(directoryPath);
+                        }
+
+                        // Extract the file
+                        //entry.WriteTo(File.OpenWrite(filePath));  // error - files keept beeing locked
+                        // Ensure the entry's stream is properly disposed of
+                        using (var fileStream = File.OpenWrite(filePath))
+                        {
+                            entry.WriteTo(fileStream);
+                        }
+                    }
+                }
             }
         }
 
 
-        private void UpdateTextBox(string message)
+            private void UpdateTextBox(string message)
         {
             if (!tbStatus.Dispatcher.CheckAccess()) // Check if the call needs to be marshaled to the UI thread
             {
