@@ -77,3 +77,4 @@ C:\VS_Workspace\Files2DICOM-Store\obj\Release\net6.0-windows\refint\Files2Dicom_
 C:\VS_Workspace\Files2DICOM-Store\obj\Release\net6.0-windows\Files2Dicom_Test.pdb
 C:\VS_Workspace\Files2DICOM-Store\obj\Release\net6.0-windows\Files2Dicom_Test.genruntimeconfig.cache
 C:\VS_Workspace\Files2DICOM-Store\obj\Release\net6.0-windows\ref\Files2Dicom_Test.dll
+C:\VS_Workspace\Files2DICOM-Store\bin\Release\net6.0-windows\App.config

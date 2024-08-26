@@ -23,6 +23,7 @@ using static System.Net.Mime.MediaTypeNames;
 using Microsoft.Data.SqlClient;
 using System.Collections;
 using System.Configuration;
+using System.ComponentModel;
 
 namespace Files2Dicom_Test
 {
@@ -67,23 +68,48 @@ namespace Files2Dicom_Test
             callingAeTitle = ConfigurationManager.AppSettings["callingAeTitle"];
             calledAeTitle = ConfigurationManager.AppSettings["calledAeTitle"];
 
-            connection = new SqlConnection(connectionString);
+            //this.Loaded += MainWindow_Loaded;
 
-            try
-            {
-                connection.Open();
-                UpdateTextBox("Connection to database established successfully.");
+            UpdateTextBox("Initiating database connection - please wait: " + Environment.NewLine + connectionString);
 
-            }
-            catch (Exception e)
-            {
-                UpdateTextBox("Connection to database error: " + e.Message );
-                throw;
-            }
-            
         }
 
+        protected override async void OnContentRendered(EventArgs e)
+        {
+            base.OnContentRendered(e);
 
+            btnStartScan.IsEnabled = false;
+            // Call your async function here
+            await initiateDatabaseConenction();
+            btnStartScan.IsEnabled = true;
+
+
+        }
+        private async Task initiateDatabaseConenction()
+        {
+
+            await Task.Run(async () =>
+            {
+                 connection = new SqlConnection(connectionString);
+
+                await Task.Delay(500); // 0.5 seconds delay
+                try
+                {
+                    connection.Open();
+                     UpdateTextBox("Connection to database established successfully.");
+                    
+                }
+                catch (Exception e)
+                {
+                    UpdateTextBox("Connection to database error: " + e.Message);
+                    MessageBox.Show("Error connecting to database: " + Environment.NewLine + connectionString + Environment.NewLine + Environment.NewLine + e.Message);
+                    throw;
+                    
+                }               
+
+            });
+            
+        }
 
         private async void btnStartFileScan_Click(object sender, RoutedEventArgs e)
         {
