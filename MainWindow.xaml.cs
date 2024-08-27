@@ -28,6 +28,7 @@ using SharpCompress.Common;
 using SharpCompress.Archives;
 using SharpCompress.Archives.Tar;
 using Path = System.IO.Path;
+using System.Text.RegularExpressions;
 
 namespace Files2Dicom_Test
 {
@@ -47,8 +48,10 @@ namespace Files2Dicom_Test
         private int serverPort;            // Replace with the DICOM server port
         private string callingAeTitle; // Replace with your AE Title
         private string calledAeTitle; // Replace with the server's AE Title
-        private string scanFolder; // Temp folder for extracting files
+        private string scanFolder; // Folder to Scan
         private string tempFolder; // Temp folder for extracting files
+        private string institutionRegex; // Regex filter for institution
+        
 
         private int filecount = 0;
         private int nonDicomFileCount= 0;
@@ -75,6 +78,8 @@ namespace Files2Dicom_Test
             calledAeTitle = ConfigurationManager.AppSettings["calledAeTitle"];
             scanFolder = ConfigurationManager.AppSettings["scanFolder"];
             tempFolder = ConfigurationManager.AppSettings["tempFolder"];
+            institutionRegex = ConfigurationManager.AppSettings["institutionRegex"];
+
 
             //this.Loaded += MainWindow_Loaded;
 
@@ -462,7 +467,7 @@ namespace Files2Dicom_Test
             }
         }
 
-
+      
             private void UpdateTextBox(string message)
         {
             if (!tbStatus.Dispatcher.CheckAccess()) // Check if the call needs to be marshaled to the UI thread
@@ -573,7 +578,45 @@ namespace Files2Dicom_Test
                 string patBirthd = dicomFile.Dataset.GetString(DicomTag.PatientBirthDate);
                 string institutionName  = dicomFile.Dataset.GetString(DicomTag.InstitutionName);
 
+                // Regex check for institutionName                
+                Regex regex = new Regex(institutionRegex);
+                // Check if the input string contains "Hans"
+                bool institutionRegexBool = regex.IsMatch(institutionName);
 
+                if (!institutionRegexBool)
+                {
+                    // insert noRegex success to Database
+                    // SQL query to insert data into the Employees table
+                    string query = "INSERT INTO files (filepath,fileSizeInBytes, patname,patbirthd,institutionName,error) VALUES (@filepath,@fileSizeInBytes, @patName,@patBirthd,@institutionName,@error)";
+
+                    try
+                    {
+                        // Create a SqlCommand object
+                        using (SqlCommand command = new SqlCommand(query, connection))
+                        {
+                            // Add parameters to the command
+                            command.Parameters.AddWithValue("@filepath", filePath);
+                            command.Parameters.AddWithValue("@fileSizeInBytes", fileSizeInBytes);
+                            command.Parameters.AddWithValue("@patName", patName);
+                            command.Parameters.AddWithValue("@patBirthd", patBirthd);
+                            command.Parameters.AddWithValue("@institutionName", institutionName);
+                            command.Parameters.AddWithValue("@error", "institutionRegex does not match");
+
+                            // Execute the INSERT command
+                            int rowsAffected = command.ExecuteNonQuery();
+                            UpdateTextBox($"Save C-Store result to DB - Rows inserted: {rowsAffected}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        UpdateTextBox($"An error occurred on SQL insert: {query} {ex.Message}");
+                    }
+
+                }
+                else
+                {
+
+                
                 // Create a DicomClient instance with default settings
                 var client = DicomClientFactory.Create(serverIp, serverPort, false, callingAeTitle, calledAeTitle);
 
@@ -587,12 +630,9 @@ namespace Files2Dicom_Test
                     {
                         // SQL query to insert data into the Employees table
                         string query = "INSERT INTO files (filepath,fileSizeInBytes, patname,patbirthd,institutionName,error) VALUES (@filepath,@fileSizeInBytes, @patName,@patBirthd,@institutionName,'0')";
-
-                        
+                                                
                         try
                         {
-                            
-
                             // Create a SqlCommand object
                             using (SqlCommand command = new SqlCommand(query, connection))
                             {
@@ -644,6 +684,7 @@ namespace Files2Dicom_Test
 
                 return true;
             }
+            }
             catch (Exception ex)
             {
                 UpdateTextBox($"Error performing C-STORE: {ex.Message}");
@@ -664,8 +705,10 @@ namespace Files2Dicom_Test
                     //UpdateTextBox($"Rows inserted: {rowsAffected}");
                 }
 
-                return false;
+                
             }
+            return false;
+
         }
 
         private bool pauseActivated = false;
