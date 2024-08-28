@@ -63,7 +63,7 @@ namespace Files2Dicom_Test
 
         //private string connectionString = "Server=mssql;Database=dicomImport;Integrated Security=true;TrustServerCertificate=True;";
         private string connectionString;
-        private SqlConnection connection;
+        //private SqlConnection connection;
         
 
 
@@ -103,22 +103,25 @@ namespace Files2Dicom_Test
 
             await Task.Run(async () =>
             {
-                 connection = new SqlConnection(connectionString);
+                using (SqlConnection connection = new SqlConnection(connectionString))
+                {
+                    //connection = new SqlConnection(connectionString);
 
-                await Task.Delay(500); // 0.5 seconds delay
-                try
-                {
-                    connection.Open();
-                     UpdateTextBox("Connection to database established successfully.");
-                    
-                }
-                catch (Exception e)
-                {
-                    UpdateTextBox("Connection to database error: " + e.Message);
-                    MessageBox.Show("Error connecting to database: " + Environment.NewLine + connectionString + Environment.NewLine + Environment.NewLine + e.Message);
-                    throw;
-                    
-                }               
+                    await Task.Delay(500); // 0.5 seconds delay
+                    try
+                    {
+                        connection.Open();
+                        UpdateTextBox("Connection to database established successfully.");
+
+                    }
+                    catch (Exception e)
+                    {
+                        UpdateTextBox("Connection to database error: " + e.Message);
+                        MessageBox.Show("Error connecting to database: " + Environment.NewLine + connectionString + Environment.NewLine + Environment.NewLine + e.Message);
+                        throw;
+
+                    }
+                }              
 
             });
             
@@ -212,6 +215,8 @@ namespace Files2Dicom_Test
 
             try
             {
+               
+
                 // Get all files recursively in the directory
                 string[] filePaths = Directory.GetFiles(directoryPath, "*.*", SearchOption.AllDirectories);
 
@@ -235,6 +240,7 @@ namespace Files2Dicom_Test
 
                     using (SqlConnection connection = new SqlConnection(connectionString))
                     {
+                        
                         SqlCommand commandFileExists = new SqlCommand(queryFileExists, connection);
                         commandFileExists.Parameters.AddWithValue("@filePath", filePath.ToString());
 
@@ -269,157 +275,12 @@ namespace Files2Dicom_Test
                             UpdateTextBox("File already found: " + filePath);
                         } else
                         {
-                            UpdateTextBox("File processing: " + filePath);
+                            //Thread thread1 = new Thread(new ThreadStart(processFileThread(filePath)));
 
-                            // UpdateTextBox("File path does not exist in the table.");
-                            // Get the file size
-                            FileInfo fileInfo = new FileInfo(filePath);
-                            long fileSizeInBytes = fileInfo.Length;
-
-                            //await Task.Delay(500); // Delays 
-                            bool isValidDicom = IsDicomFile(filePath);
+                            Thread thread1 = new Thread(() => processFileThread(filePath));
+                            thread1.Start();
                             
-                            if (isValidDicom)
-                            {
-
-                                dicomFileCount++;
-                                //UpdateTextBox("valid DICOM File: " + filePath);
-                              //  UpdateStats();
-                                bool successStore = await SendDicomFile(serverIp, serverPort, callingAeTitle, calledAeTitle, filePath, fileSizeInBytes.ToString());
-                                //UpdateTextBox($"C-STORE {(successStore ? "succeeded" : "failed")}");
-                                UpdateTextBox("C-STORE response: Success " + filePath);
-
-
-                            }
-                            else if (filePath.EndsWith(".tar")) 
-                            {
-                                // insert DB-Entry for tar file
-                                string queryInsertTarFile = "INSERT INTO files (filepath,fileSizeInBytes,error) VALUES (@filepath,@fileSizeInBytes,@errortext)";
-                                try
-                                {
-                                    // Create a SqlCommand object
-                                    using (SqlCommand command = new SqlCommand(queryInsertTarFile, connection))
-                                    {
-                                        // Add parameters to the command
-                                        command.Parameters.AddWithValue("@filepath", filePath);
-                                        command.Parameters.AddWithValue("@fileSizeInBytes", fileSizeInBytes.ToString());
-                                        command.Parameters.AddWithValue("@errortext", "File is tar archive... extracting ");
-
-                                        // Execute the INSERT command
-                                        int rowsAffected = command.ExecuteNonQuery();
-                                        //UpdateTextBox($"Rows inserted: {rowsAffected}");
-                                    }                                    
-                                }
-                                catch (Exception exc)
-                                {
-                                    UpdateTextBox($"An error occurred on SQL insert: {queryInsertTarFile} {exc.Message}");
-                                }
-
-                                // process tar archive file
-                                // Create a temp directory
-                                string tempDir = Path.Combine(tempFolder, Guid.NewGuid().ToString());
-                                Directory.CreateDirectory(tempDir);
-                                try
-                                {
-                                    // Extract the tar file to the temp directory
-                                    ExtractTarFile(filePath, tempDir);
-
-                                    // Process files: Print file names to console
-                                    foreach (var extractedFile in Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories))
-                                    {
-                                        FileInfo extractedFileInfo = new FileInfo(filePath);
-                                        long extractedFileSizeInBytes = fileInfo.Length;
-                                        try
-                                        {
-                                            //UpdateTextBox(Path.GetFileName(extractedFile));
-                                            bool extractedIsValidDicom = IsDicomFile(extractedFile);
-                                            if (extractedIsValidDicom)
-                                            {
-
-                                                dicomFileCount++;
-                                                //UpdateTextBox("valid DICOM File: " + extractedFile);
-                                                //  UpdateStats();
-                                                bool successStore = await SendDicomFile(serverIp, serverPort, callingAeTitle, calledAeTitle, extractedFile, extractedFileSizeInBytes.ToString());
-                                                //UpdateTextBox($"C-STORE {(successStore ? "succeeded" : "failed")}");
-                                                UpdateTextBox("C-STORE response: Success " + extractedFile + " : originalArchive: " + filePath);
-
-                                            }
-                                        }
-                                        catch (Exception exCheckFIle)
-                                        {
-                                            UpdateTextBox("error DicomTest file: " + extractedFile + " : error: " + exCheckFIle);
-
-                                        }   
-                                        
-                                    }
-                                } catch (Exception ex)
-                                {
-                                    string query = "INSERT INTO files (filepath,fileSizeInBytes,error) VALUES (@filepath,@fileSizeInBytes,@errortext)";
-
-                                    try
-                                    {
-
-
-                                        // Create a SqlCommand object
-                                        using (SqlCommand command = new SqlCommand(query, connection))
-                                        {
-                                            // Add parameters to the command
-                                            command.Parameters.AddWithValue("@filepath", filePath);
-                                            command.Parameters.AddWithValue("@fileSizeInBytes", fileSizeInBytes.ToString());
-                                            command.Parameters.AddWithValue("@errortext", "Error extracting tar archive: " + ex.Message);
-
-                                            // Execute the INSERT command
-                                            int rowsAffected = command.ExecuteNonQuery();
-                                            //UpdateTextBox($"Rows inserted: {rowsAffected}");
-                                        }
-                                        UpdateTextBox(filePath + ": Error extracting tar archive: " + ex.Message);
-                                    }
-                                    catch (Exception exc)
-                                    {
-                                        UpdateTextBox($"An error occurred on SQL insert: {query} {exc.Message}");
-                                    }
-
-                                }
-                                finally
-                                {
-                                    // Clean up: Delete the extracted files
-                                    if (Directory.Exists(tempDir))
-                                    {
-                                        Directory.Delete(tempDir, true);
-                                    }
-                                }
-
-                            }
-                            else
-
-                            {
-                                nonDicomFileCount++;
-                              //  UpdateStats();
-                                // SQL query to insert data into the Employees table
-                                string query = "INSERT INTO files (filepath,fileSizeInBytes,error) VALUES (@filepath,@fileSizeInBytes,'no-dicom-file')";
-                                                                
-                                try
-                                {
-
-
-                                    // Create a SqlCommand object
-                                    using (SqlCommand command = new SqlCommand(query, connection))
-                                    {
-                                        // Add parameters to the command
-                                        command.Parameters.AddWithValue("@filepath", filePath);
-                                        command.Parameters.AddWithValue("@fileSizeInBytes", fileSizeInBytes.ToString());
-
-                                        // Execute the INSERT command
-                                        int rowsAffected = command.ExecuteNonQuery();
-                                        //UpdateTextBox($"Rows inserted: {rowsAffected}");
-                                    }
-                                    UpdateTextBox("Added non-DICOM File to Database: "+ filePath);
-                                }
-                                catch (Exception ex)
-                                {
-                                    UpdateTextBox($"An error occurred on SQL insert: {query} {ex.Message}");
-                                }
-                            }
+                            //processFileThread(filePath);
 
                         }
 
@@ -434,8 +295,175 @@ namespace Files2Dicom_Test
                 
                 UpdateTextBox("An error occurred: " + ex.Message);
             }
+            UpdateTextBox("files processed: " + filecount.ToString());
             UpdateTextBox("PerformAsyncTask finished.");
             btnStartScan.IsEnabled = true;
+        }
+
+        async void processFileThread(string filePath)
+        {
+            UpdateTextBox("File processing: " + filePath);
+
+            // UpdateTextBox("File path does not exist in the table.");
+            // Get the file size
+            FileInfo fileInfo = new FileInfo(filePath);
+            long fileSizeInBytes = fileInfo.Length;
+
+            //await Task.Delay(500); // Delays 
+            bool isValidDicom = IsDicomFile(filePath);
+
+            if (isValidDicom)
+            {
+
+                dicomFileCount++;
+                //UpdateTextBox("valid DICOM File: " + filePath);
+                //  UpdateStats();
+                bool successStore = await SendDicomFile(serverIp, serverPort, callingAeTitle, calledAeTitle, filePath, fileSizeInBytes.ToString());
+                //UpdateTextBox($"C-STORE {(successStore ? "succeeded" : "failed")}");
+                UpdateTextBox("C-STORE response: Success " + filePath);
+
+
+            }
+            else if (filePath.EndsWith(".tar"))
+            {
+                // insert DB-Entry for tar file
+                string queryInsertTarFile = "INSERT INTO files (filepath,fileSizeInBytes,error) VALUES (@filepath,@fileSizeInBytes,@errortext)";
+                try
+                {
+                    using (SqlConnection connection = new SqlConnection(connectionString))
+                    {
+                        connection.Open();
+                        // Create a SqlCommand object
+                        using (SqlCommand command = new SqlCommand(queryInsertTarFile, connection))
+                        {
+                            // Add parameters to the command
+                            command.Parameters.AddWithValue("@filepath", filePath);
+                            command.Parameters.AddWithValue("@fileSizeInBytes", fileSizeInBytes.ToString());
+                            command.Parameters.AddWithValue("@errortext", "File is tar archive... extracting ");
+
+                            // Execute the INSERT command
+                            int rowsAffected = command.ExecuteNonQuery();
+                            //UpdateTextBox($"Rows inserted: {rowsAffected}");
+                        }
+                    }
+                }
+                catch (Exception exc)
+                {
+                    UpdateTextBox($"An error occurred on SQL insert: {queryInsertTarFile} {exc.Message}");
+                }
+
+                // process tar archive file
+                // Create a temp directory
+                string tempDir = Path.Combine(tempFolder, Guid.NewGuid().ToString());
+                Directory.CreateDirectory(tempDir);
+                try
+                {
+                    // Extract the tar file to the temp directory
+                    ExtractTarFile(filePath, tempDir);
+
+                    // Process files: Print file names to console
+                    foreach (var extractedFile in Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories))
+                    {
+                        FileInfo extractedFileInfo = new FileInfo(filePath);
+                        long extractedFileSizeInBytes = fileInfo.Length;
+                        try
+                        {
+                            //UpdateTextBox(Path.GetFileName(extractedFile));
+                            bool extractedIsValidDicom = IsDicomFile(extractedFile);
+                            if (extractedIsValidDicom)
+                            {
+
+                                dicomFileCount++;
+                                //UpdateTextBox("valid DICOM File: " + extractedFile);
+                                //  UpdateStats();
+                                bool successStore = await SendDicomFile(serverIp, serverPort, callingAeTitle, calledAeTitle, extractedFile, extractedFileSizeInBytes.ToString());
+                                //UpdateTextBox($"C-STORE {(successStore ? "succeeded" : "failed")}");
+                                UpdateTextBox("C-STORE response: Success " + extractedFile + " : originalArchive: " + filePath);
+
+                            }
+                        }
+                        catch (Exception exCheckFIle)
+                        {
+                            UpdateTextBox("error DicomTest file: " + extractedFile + " : error: " + exCheckFIle);
+
+                        }
+
+                    }
+                }
+                catch (Exception ex)
+                {
+                    string query = "INSERT INTO files (filepath,fileSizeInBytes,error) VALUES (@filepath,@fileSizeInBytes,@errortext)";
+
+                    try
+                    {
+
+                        using (SqlConnection connection = new SqlConnection(connectionString))
+                        {
+                            connection.Open();
+                            // Create a SqlCommand object
+                            using (SqlCommand command = new SqlCommand(query, connection))
+                            {
+                                // Add parameters to the command
+                                command.Parameters.AddWithValue("@filepath", filePath);
+                                command.Parameters.AddWithValue("@fileSizeInBytes", fileSizeInBytes.ToString());
+                                command.Parameters.AddWithValue("@errortext", "Error extracting tar archive: " + ex.Message);
+
+                                // Execute the INSERT command
+                                int rowsAffected = command.ExecuteNonQuery();
+                                //UpdateTextBox($"Rows inserted: {rowsAffected}");
+                            }
+                            UpdateTextBox(filePath + ": Error extracting tar archive: " + ex.Message);
+                        }
+                    }
+                    catch (Exception exc)
+                    {
+                        UpdateTextBox($"An error occurred on SQL insert: {query} {exc.Message}");
+                    }
+
+                }
+                finally
+                {
+                    // Clean up: Delete the extracted files
+                    if (Directory.Exists(tempDir))
+                    {
+                        Directory.Delete(tempDir, true);
+                    }
+                }
+
+            }
+            else
+
+            {
+                nonDicomFileCount++;
+                //  UpdateStats();
+                // SQL query to insert data into the Employees table
+                string query = "INSERT INTO files (filepath,fileSizeInBytes,error) VALUES (@filepath,@fileSizeInBytes,'no-dicom-file')";
+
+                try
+                {
+
+                    using (SqlConnection connection = new SqlConnection(connectionString))
+                    {
+                        connection.Open();
+                        // Create a SqlCommand object
+                        using (SqlCommand command = new SqlCommand(query, connection))
+                        {
+                            // Add parameters to the command
+                            command.Parameters.AddWithValue("@filepath", filePath);
+                            command.Parameters.AddWithValue("@fileSizeInBytes", fileSizeInBytes.ToString());
+
+                            // Execute the INSERT command
+                            int rowsAffected = command.ExecuteNonQuery();
+                            //UpdateTextBox($"Rows inserted: {rowsAffected}");
+                        }
+                    }
+                    UpdateTextBox("Added non-DICOM File to Database: " + filePath);
+                }
+                catch (Exception ex)
+                {
+                    UpdateTextBox($"An error occurred on SQL insert: {query} {ex.Message}");
+                }
+            }
         }
 
         static void ExtractTarFile(string tarFilePath, string outputDir)
@@ -591,20 +619,24 @@ namespace Files2Dicom_Test
 
                     try
                     {
-                        // Create a SqlCommand object
-                        using (SqlCommand command = new SqlCommand(query, connection))
+                        using (SqlConnection connection = new SqlConnection(connectionString))
                         {
-                            // Add parameters to the command
-                            command.Parameters.AddWithValue("@filepath", filePath);
-                            command.Parameters.AddWithValue("@fileSizeInBytes", fileSizeInBytes);
-                            command.Parameters.AddWithValue("@patName", patName);
-                            command.Parameters.AddWithValue("@patBirthd", patBirthd);
-                            command.Parameters.AddWithValue("@institutionName", institutionName);
-                            command.Parameters.AddWithValue("@error", "institutionRegex does not match");
+                            connection.Open();
+                            // Create a SqlCommand object
+                            using (SqlCommand command = new SqlCommand(query, connection))
+                            {
+                                // Add parameters to the command
+                                command.Parameters.AddWithValue("@filepath", filePath);
+                                command.Parameters.AddWithValue("@fileSizeInBytes", fileSizeInBytes);
+                                command.Parameters.AddWithValue("@patName", patName);
+                                command.Parameters.AddWithValue("@patBirthd", patBirthd);
+                                command.Parameters.AddWithValue("@institutionName", institutionName);
+                                command.Parameters.AddWithValue("@error", "institutionRegex does not match");
 
-                            // Execute the INSERT command
-                            int rowsAffected = command.ExecuteNonQuery();
-                            UpdateTextBox($"Save C-Store result to DB - Rows inserted: {rowsAffected}");
+                                // Execute the INSERT command
+                                int rowsAffected = command.ExecuteNonQuery();
+                                UpdateTextBox($"Save C-Store result to DB - Rows inserted: {rowsAffected}");
+                            }
                         }
                     }
                     catch (Exception ex)
@@ -633,19 +665,23 @@ namespace Files2Dicom_Test
                                                 
                         try
                         {
-                            // Create a SqlCommand object
-                            using (SqlCommand command = new SqlCommand(query, connection))
+                            using (SqlConnection connection = new SqlConnection(connectionString))
                             {
-                                // Add parameters to the command
-                                command.Parameters.AddWithValue("@filepath", filePath);
-                                command.Parameters.AddWithValue("@fileSizeInBytes", fileSizeInBytes);                                
-                                command.Parameters.AddWithValue("@patName", patName);
-                                command.Parameters.AddWithValue("@patBirthd", patBirthd);
-                                command.Parameters.AddWithValue("@institutionName", institutionName);
+                                connection.Open();
+                                // Create a SqlCommand object
+                                using (SqlCommand command = new SqlCommand(query, connection))
+                                {
+                                    // Add parameters to the command
+                                    command.Parameters.AddWithValue("@filepath", filePath);
+                                    command.Parameters.AddWithValue("@fileSizeInBytes", fileSizeInBytes);
+                                    command.Parameters.AddWithValue("@patName", patName);
+                                    command.Parameters.AddWithValue("@patBirthd", patBirthd);
+                                    command.Parameters.AddWithValue("@institutionName", institutionName);
 
-                                // Execute the INSERT command
-                                int rowsAffected = command.ExecuteNonQuery();
-                                UpdateTextBox($"Save C-Store result to DB - Rows inserted: {rowsAffected}");
+                                    // Execute the INSERT command
+                                    int rowsAffected = command.ExecuteNonQuery();
+                                    UpdateTextBox($"Save C-Store result to DB - Rows inserted: {rowsAffected}");
+                                }
                             }
                         }
                         catch (Exception ex)
@@ -659,18 +695,22 @@ namespace Files2Dicom_Test
                         // SQL query to insert data into the Employees table
                         string query = "INSERT INTO files (filepath,fileSizeInBytes,error) VALUES (@filepath,@fileSizeInBytes,@error)";
 
-                        // Create a SqlCommand object
-                        using (SqlCommand command = new SqlCommand(query, connection))
+                        using (SqlConnection connection = new SqlConnection(connectionString))
                         {
-                            // Add parameters to the command
-                            command.Parameters.AddWithValue("@filepath", filePath);
-                            command.Parameters.AddWithValue("@fileSizeInBytes", fileSizeInBytes);
-                            command.Parameters.AddWithValue("@error", res.Status);
-                            
+                            connection.Open();
+                            // Create a SqlCommand object
+                            using (SqlCommand command = new SqlCommand(query, connection))
+                            {
+                                // Add parameters to the command
+                                command.Parameters.AddWithValue("@filepath", filePath);
+                                command.Parameters.AddWithValue("@fileSizeInBytes", fileSizeInBytes);
+                                command.Parameters.AddWithValue("@error", res.Status);
 
-                            // Execute the INSERT command
-                            int rowsAffected = command.ExecuteNonQuery();
-                            UpdateTextBox($"Rows inserted: {rowsAffected}");
+
+                                // Execute the INSERT command
+                                int rowsAffected = command.ExecuteNonQuery();
+                                UpdateTextBox($"Rows inserted: {rowsAffected}");
+                            }
                         }
 
                     }
@@ -691,18 +731,22 @@ namespace Files2Dicom_Test
                 // SQL query to insert data into the Employees table
                 string query = "INSERT INTO files (filepath,fileSizeInBytes,error) VALUES (@filepath,@fileSizeInBytes,@error)";
 
-                // Create a SqlCommand object
-                using (SqlCommand command = new SqlCommand(query, connection))
+                using (SqlConnection connection = new SqlConnection(connectionString))
                 {
-                    // Add parameters to the command
-                    command.Parameters.AddWithValue("@filepath", filePath);
-                    command.Parameters.AddWithValue("@fileSizeInBytes", fileSizeInBytes);
-                    command.Parameters.AddWithValue("@error", ex.Message);
+                    connection.Open();
+                    // Create a SqlCommand object
+                    using (SqlCommand command = new SqlCommand(query, connection))
+                    {
+                        // Add parameters to the command
+                        command.Parameters.AddWithValue("@filepath", filePath);
+                        command.Parameters.AddWithValue("@fileSizeInBytes", fileSizeInBytes);
+                        command.Parameters.AddWithValue("@error", ex.Message);
 
 
-                    // Execute the INSERT command
-                    int rowsAffected = command.ExecuteNonQuery();
-                    //UpdateTextBox($"Rows inserted: {rowsAffected}");
+                        // Execute the INSERT command
+                        int rowsAffected = command.ExecuteNonQuery();
+                        //UpdateTextBox($"Rows inserted: {rowsAffected}");
+                    }
                 }
 
                 
