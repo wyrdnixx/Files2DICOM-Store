@@ -29,6 +29,7 @@ using SharpCompress.Archives;
 using SharpCompress.Archives.Tar;
 using Path = System.IO.Path;
 using System.Text.RegularExpressions;
+using System.Windows.Forms;
 
 namespace Files2Dicom_Test
 {
@@ -51,8 +52,9 @@ namespace Files2Dicom_Test
         private string scanFolder; // Folder to Scan
         private string tempFolder; // Temp folder for extracting files
         private string institutionRegex; // Regex filter for institution
-        
 
+        private int threadCount = 0;
+        private int maxThreads = 2;
         private int filecount = 0;
         private int nonDicomFileCount= 0;
         private int dicomFileCount= 0;
@@ -117,7 +119,7 @@ namespace Files2Dicom_Test
                     catch (Exception e)
                     {
                         UpdateTextBox("Connection to database error: " + e.Message);
-                        MessageBox.Show("Error connecting to database: " + Environment.NewLine + connectionString + Environment.NewLine + Environment.NewLine + e.Message);
+                        System.Windows.MessageBox.Show("Error connecting to database: " + Environment.NewLine + connectionString + Environment.NewLine + Environment.NewLine + e.Message);
                         throw;
 
                     }
@@ -277,8 +279,11 @@ namespace Files2Dicom_Test
                         {
                             //Thread thread1 = new Thread(new ThreadStart(processFileThread(filePath)));
 
-                            Thread thread1 = new Thread(() => processFileThread(filePath));
-                            thread1.Start();
+                          
+                                    Thread thread1 = new Thread(() => processFileThread(filePath));
+                                    thread1.Start();
+                         
+                            
                             
                             //processFileThread(filePath);
 
@@ -302,6 +307,8 @@ namespace Files2Dicom_Test
 
         async void processFileThread(string filePath)
         {
+            threadCount++;
+            UpdateThreadCount();
             UpdateTextBox("File processing: " + filePath);
 
             // UpdateTextBox("File path does not exist in the table.");
@@ -429,6 +436,7 @@ namespace Files2Dicom_Test
                         Directory.Delete(tempDir, true);
                     }
                 }
+             
 
             }
             else
@@ -464,6 +472,9 @@ namespace Files2Dicom_Test
                     UpdateTextBox($"An error occurred on SQL insert: {query} {ex.Message}");
                 }
             }
+
+            threadCount--;
+            UpdateThreadCount();
         }
 
         static void ExtractTarFile(string tarFilePath, string outputDir)
@@ -495,6 +506,17 @@ namespace Files2Dicom_Test
             }
         }
 
+        private void UpdateThreadCount()
+        {
+            if (!tbThreadCount.Dispatcher.CheckAccess()) // Check if the call needs to be marshaled to the UI thread
+            {
+                tbStatus.Dispatcher.Invoke(() => UpdateThreadCount());
+            }
+            else
+            {
+                tbThreadCount.Text = threadCount.ToString();
+            }
+        }
       
             private void UpdateTextBox(string message)
         {

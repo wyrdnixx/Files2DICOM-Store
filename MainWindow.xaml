@@ -15,6 +15,8 @@
         <Label Content="FileCount" HorizontalAlignment="Left" Margin="514,22,0,0" VerticalAlignment="Top" Width="106"/>
         <TextBox x:Name="tbNonDicomFiles" HorizontalAlignment="Left" Margin="620,48,0,0" TextWrapping="Wrap" Text="TextBox" VerticalAlignment="Top" Width="120"/>
         <Label Content="NonDicomFiles" HorizontalAlignment="Left" Margin="514,44,0,0" VerticalAlignment="Top" Width="106"/>
+        <TextBox x:Name="tbThreadCount" HorizontalAlignment="Left" Margin="620,75,0,0" TextWrapping="Wrap" Text="Threads" VerticalAlignment="Top" Width="120"/>
+        <Label Content="Threads" HorizontalAlignment="Left" Margin="514,71,0,0" VerticalAlignment="Top" Width="106"/>
 
     </Grid>
 </Window>
